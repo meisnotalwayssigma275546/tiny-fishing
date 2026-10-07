@@ -360,9 +360,9 @@
       return card;
     };
     const page1 = el("div", { className: "pg hide" }, [
-      mkLevelRow("depth", "Max depth", 9999),
-      mkLevelRow("fish", "Max fishes", 9999),
-      mkLevelRow("income", "Offline earning", 1000)
+      mkLevelRow("depth", "Max depth", 9223372036854775807),
+      mkLevelRow("fish", "Max fishes", 9223372036854775807),
+      mkLevelRow("income", "Offline earning", 9223372036854775807)
     ]);
 
     // ===== TAB 3: advanced (EVERYTHING: numbers, text, colors, flags, objects) =====
