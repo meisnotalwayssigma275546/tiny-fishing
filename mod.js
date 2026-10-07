@@ -1,3 +1,8 @@
+window.addEventListener('load', () => {
+    // Everything (HTML, CSS, images, scripts) is fully loaded!
+    console.log("Page and all resources are fully loaded.");
+    initGame();
+});
 (function () {
   if (window.__fishGui) return console.log("GUI already loaded - refresh the page to reload");
   if (window.__goldSwarm || window.__origE9 || window.__swarmOn) return console.log("old patches are active - refresh the page first");
