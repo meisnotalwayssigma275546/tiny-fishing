@@ -207,16 +207,22 @@
       ".srch input::placeholder{color:rgba(0,0,0,.55)}",
       ".rbtn{border:0;border-radius:16px;padding:0 13px;height:32px;background:linear-gradient(160deg,rgba(255,255,255,.34),rgba(255,255,255,.12));box-shadow:inset 0 1px 1px rgba(255,255,255,.6);color:#000;font:600 12px -apple-system,system-ui,sans-serif;cursor:pointer;flex:none;transition:transform .4s " + spring + "}",
       ".rbtn:active{transform:scale(.9)}",
+      ".chips{display:flex;gap:6px;flex-wrap:wrap}",
+      ".chip{height:26px;line-height:26px;padding:0 12px;border-radius:13px;background:rgba(0,0,0,.2);box-shadow:inset 0 1px 3px rgba(0,0,0,.25),0 1px 0 rgba(255,255,255,.2);font-weight:600;font-size:11.5px;cursor:pointer;opacity:.7;transition:opacity .2s,transform .4s " + spring + "}",
+      ".chip.on{opacity:1;background:linear-gradient(160deg,rgba(255,255,255,.42),rgba(255,255,255,.14));box-shadow:inset 0 1px 1px rgba(255,255,255,.7),0 2px 8px rgba(0,0,0,.2)}",
+      ".chip:active{transform:scale(.92)}",
       ".thd{display:flex;justify-content:space-between;padding:0 12px;font-size:10.5px;font-weight:600;letter-spacing:.5px;opacity:.65}",
-      ".tbl{position:relative;height:270px;overflow-y:auto;border-radius:20px;background:rgba(0,0,0,.2);box-shadow:inset 0 1px 3px rgba(0,0,0,.28),0 1px 0 rgba(255,255,255,.2)}",
+      ".tbl{position:relative;height:250px;overflow-y:auto;border-radius:20px;background:rgba(0,0,0,.2);box-shadow:inset 0 1px 3px rgba(0,0,0,.28),0 1px 0 rgba(255,255,255,.2)}",
       ".tbl::-webkit-scrollbar{width:6px}.tbl::-webkit-scrollbar-thumb{background:rgba(255,255,255,.3);border-radius:3px}",
       ".spc{position:relative;width:100%}",
       ".vw{position:absolute;left:0;right:0;top:0}",
       ".tr{height:30px;box-sizing:border-box;display:flex;align-items:center;gap:8px;padding:0 10px;border-bottom:1px solid rgba(255,255,255,.07)}",
+      ".sw8{width:13px;height:13px;border-radius:4px;flex:none;box-shadow:inset 0 0 0 1px rgba(0,0,0,.4),0 0 0 1px rgba(255,255,255,.3)}",
       ".nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font:11px " + MONO + "}",
       ".nm i{font-style:normal;color:#000000;margin-left:7px;font-family:-apple-system,system-ui,sans-serif;font-size:10.5px}",
       ".tr input{width:112px;flex:none;box-sizing:border-box;background:rgba(255,255,255,.12);border:0;border-radius:9px;padding:4px 8px;color:#000;font:600 11.5px " + MONO + ";outline:none;text-align:right;box-shadow:inset 0 1px 2px rgba(0,0,0,.25)}",
       ".tr input:focus{background:rgba(255,255,255,.26)}",
+      ".tr input.ro{opacity:.55}",
       ".empty{padding:22px;text-align:center;opacity:.6;font-size:12px}"
     ].join("");
     const el = (tag, props, kids) => {
@@ -267,7 +273,7 @@
 
     const minBtn = el("button", { className: "min", textContent: "–" });
     const dot = el("span", { className: "dot" });
-    const head = el("div", { className: "h" }, [el("span", { textContent: "Fish Spawn" }, [dot]), minBtn]);
+    const head = el("div", { className: "h" }, [el("span", { textContent: "Mod Menu" }, [dot]), minBtn]);
     const status = el("div", { className: "status" });
 
     // ---- reusable number stepper ----
@@ -359,7 +365,7 @@
       mkLevelRow("income", "Offline earning", 1000)
     ]);
 
-    // ===== TAB 3: advanced (every variable, scrollable + editable) =====
+    // ===== TAB 3: advanced (EVERYTHING: numbers, text, colors, flags, objects) =====
     // Variables we decoded from the game code get a readable label and float to the top.
     const KNOWN = {
       "G._CG": "max depth level", "G._cF": "max depth", "G._BG": "max fishes level", "G._2F": "max fishes",
@@ -368,44 +374,80 @@
     };
     const DERIVED = { "G._cF": 1, "G._2F": 1, "G._DG": 1 };
     const ROW = 30;
+    const COLOR_KEY = /colou?r|blend|tint|^c_|bgcol|fgcol|shadow|glow/i;
     let allRows = [], rows = [], rendered = [];
+    let kindFilter = "all";
 
-    const rootOf = (n) => (n === "G" ? G() : globalObj());
+    // "ds" = the game's data-structure storage (ds_maps live here: fish types, texts, settings...)
+    const rootOf = (n) => (n === "G" ? G() : n === "ds" ? window._Bc1 : globalObj());
     const resolveRow = (r) => {
       let o = rootOf(r.root);
       for (let i = 0; i < r.keys.length - 1; i++) { o = o[r.keys[i]]; if (o == null) return null; }
       return [o, r.keys[r.keys.length - 1]];
     };
-    const readRow = (r) => { try { const p = resolveRow(r); return p ? p[0][p[1]] : undefined; } catch (e) { return undefined; } };
+    const isLong = (o) => o && typeof o === "object" && "_Jc1" in o && "_8d1" in o;
+    const readRow = (r) => {
+      try {
+        const p = resolveRow(r);
+        if (!p) return undefined;
+        const v = p[0][p[1]];
+        if (r.type === "long") return isLong(v) ? v._8d1 * 4294967296 + (v._Jc1 >>> 0) : undefined;
+        if (r.type === "object" || r.type === "array") {
+          if (v == null || typeof v !== "object") return undefined;
+          return Array.isArray(v) ? "[" + v.length + " items]" : "{" + Object.keys(v).length + " keys}";
+        }
+        return v;
+      } catch (e) { return undefined; }
+    };
+    const swatchColor = (r, v) => {
+      if (typeof v === "number") return "rgb(" + (v & 255) + "," + ((v >> 8) & 255) + "," + ((v >> 16) & 255) + ")"; // GameMaker colors are BGR
+      if (typeof v === "string") return v;
+      return "transparent";
+    };
 
     const scanAll = () => {
       const out = [], seen = new WeakSet();
       let n = 0;
-      const LIMIT = 30000;
+      const LIMIT = 150000;
+      const add = (row) => { out.push(row); n++; };
       const walk = (o, rootName, keys, pathStr, depth) => {
-        if (depth > 4 || n >= LIMIT) return;
+        if (depth > 6 || n >= LIMIT) return;
         let ks; try { ks = Object.keys(o); } catch (e) { return; }
         const isArr = Array.isArray(o);
-        if (isArr && ks.length > 300) ks = ks.slice(0, 300);
+        if (isArr && ks.length > 500) ks = ks.slice(0, 500);
         for (const k of ks) {
           if (n >= LIMIT) break;
           let v; try { v = o[k]; } catch (e) { continue; }
           const p = isArr ? pathStr + "[" + k + "]" : pathStr + "." + k;
           const t = typeof v;
-          if (t === "number" || t === "boolean" || (t === "string" && v.length <= 500)) {
-            out.push({ root: rootName, keys: keys.concat(k), path: p, type: t, label: KNOWN[p] || "" });
-            n++;
-          } else if (v && t === "object") {
+          const base = { root: rootName, keys: keys.concat(k), path: p, label: KNOWN[p] || "" };
+          if (t === "number") {
+            const isCol = COLOR_KEY.test(String(k)) && Number.isInteger(v) && v >= 0 && v <= 16777215;
+            add(Object.assign(base, { type: "number", kind: isCol ? "color" : "num" }));
+          } else if (t === "boolean") {
+            add(Object.assign(base, { type: "boolean", kind: "other" }));
+          } else if (t === "string") {
+            const isCol = /^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(v) || /^rgba?\(/i.test(v);
+            add(Object.assign(base, { type: "string", kind: isCol ? "color" : "text" }));
+          } else if (v === null || t === "undefined") {
+            add(Object.assign(base, { type: "null", kind: "other" }));
+          } else if (t === "object") {
             const tag = Object.prototype.toString.call(v);
             if ((tag === "[object Object]" || tag === "[object Array]") && !seen.has(v)) {
               seen.add(v);
-              walk(v, rootName, keys.concat(k), p, depth + 1);
+              if (isLong(v)) {
+                add(Object.assign(base, { type: "long", kind: "num" }));
+              } else {
+                add(Object.assign(base, { type: Array.isArray(v) ? "array" : "object", kind: "other" }));
+                walk(v, rootName, keys.concat(k), p, depth + 1);
+              }
             }
           }
         }
       };
-      [["G", G()], ["global", globalObj()]].forEach(([name, obj]) => {
-        if (!obj) return;
+      const roots = [["G", G()], ["ds", window._Bc1], ["global", globalObj()]];
+      roots.forEach(([name, obj]) => {
+        if (!obj || typeof obj !== "object") return;
         seen.add(obj);
         walk(obj, name, [], name, 0);
       });
@@ -414,8 +456,19 @@
       return known.concat(rest);
     };
 
-    const searchIn = el("input", { type: "text", placeholder: "Search name or exact value..." });
+    const searchIn = el("input", { type: "text", placeholder: "Search name, text or exact value..." });
     const rescanBtn = el("button", { className: "rbtn", textContent: "Rescan" });
+    const chipDefs = [["all", "All"], ["text", "Text"], ["num", "Numbers"], ["color", "Colors"], ["other", "Other"]];
+    const chipEls = chipDefs.map((d) => {
+      const c = el("div", { className: "chip" + (d[0] === "all" ? " on" : ""), textContent: d[1] });
+      c.onclick = () => {
+        kindFilter = d[0];
+        chipEls.forEach((x, i) => x.classList.toggle("on", chipDefs[i][0] === kindFilter));
+        applyFilter();
+      };
+      return c;
+    });
+    const chips = el("div", { className: "chips" }, chipEls);
     const countLbl = el("div", { className: "thd" }, [el("span", { textContent: "VARIABLE" }), el("span", { textContent: "VALUE" })]);
     const scroller = el("div", { className: "tbl" });
     const spacer = el("div", { className: "spc" });
@@ -424,27 +477,43 @@
     scroller.appendChild(spacer);
 
     const commit = (r, input) => {
+      if (r.type === "object" || r.type === "array") { const c = readRow(r); input.value = c === undefined ? "" : String(c); return; }
       const txt = input.value;
       let v;
-      if (r.type === "number") {
-        v = Number(txt);
-        if (txt.trim() === "" || !isFinite(v)) { input.value = String(readRow(r)); status.textContent = "not a number"; return; }
+      if (r.type === "number" || r.type === "long") {
+        const s = txt.trim();
+        if (/^#[0-9a-f]{6}$/i.test(s)) {
+          v = parseInt(s.slice(1, 3), 16) | (parseInt(s.slice(3, 5), 16) << 8) | (parseInt(s.slice(5, 7), 16) << 16); // hex -> GameMaker BGR
+        } else {
+          v = Number(s);
+          if (s === "" || !isFinite(v)) { const c = readRow(r); input.value = String(c); status.textContent = "not a number"; return; }
+        }
       } else if (r.type === "boolean") {
         const s = txt.trim().toLowerCase();
         if (s === "true" || s === "1") v = true;
         else if (s === "false" || s === "0") v = false;
         else { input.value = String(readRow(r)); status.textContent = "use true / false"; return; }
+      } else if (r.type === "null") {
+        const s = txt.trim();
+        if (s === "true") v = true;
+        else if (s === "false") v = false;
+        else if (s !== "" && isFinite(Number(s))) v = Number(s);
+        else v = txt;
       } else v = txt;
       try {
         const p = resolveRow(r);
-        p[0][p[1]] = v;
+        if (r.type === "long") {
+          const o = p[0][p[1]];
+          const hi = Math.floor(v / 4294967296), lo = v - hi * 4294967296;
+          o._Jc1 = lo | 0; o._8d1 = hi;
+        } else p[0][p[1]] = v;
         input.value = String(v);
         status.textContent = "set " + r.path + " = " + v + (DERIVED[r.path] ? " (game recalcs this from the level)" : "");
       } catch (e) { status.textContent = "set ERR: " + e; }
     };
 
     const renderTable = () => {
-      const top = scroller.scrollTop, vh = scroller.clientHeight || 270;
+      const top = scroller.scrollTop, vh = scroller.clientHeight || 250;
       const start = Math.max(0, Math.floor(top / ROW) - 4);
       const end = Math.min(rows.length, Math.ceil((top + vh) / ROW) + 4);
       spacer.style.height = rows.length * ROW + "px";
@@ -458,9 +527,16 @@
         const nm = el("div", { className: "nm", title: r.path + "  (" + r.type + ")" }, [document.createTextNode(r.path)]);
         if (r.label) nm.appendChild(el("i", { textContent: r.label }));
         const input = el("input", { type: "text", value: cur === undefined ? "" : String(cur), spellcheck: false });
-        input.onchange = () => commit(r, input);
-        input.onkeydown = (e) => { if (e.key === "Enter") input.blur(); };
-        view.appendChild(el("div", { className: "tr" }, [nm, input]));
+        if (r.type === "object" || r.type === "array") { input.readOnly = true; input.className = "ro"; }
+        else {
+          input.onchange = () => commit(r, input);
+          input.onkeydown = (e) => { if (e.key === "Enter") input.blur(); };
+        }
+        input.title = cur === undefined ? "" : String(cur);
+        const kids = [];
+        if (r.kind === "color") { const sw = el("span", { className: "sw8" }); sw.style.background = swatchColor(r, cur); kids.push(sw); }
+        kids.push(nm, input);
+        view.appendChild(el("div", { className: "tr" }, kids));
         rendered.push({ r, input });
       }
     };
@@ -471,17 +547,17 @@
       requestAnimationFrame(() => { rafPending = false; renderTable(); });
     });
 
-    const updateCount = () => { /* shown in status */ };
     const applyFilter = () => {
       const q = searchIn.value.trim().toLowerCase();
-      if (!q) rows = allRows;
-      else {
-        rows = allRows.filter((r) => {
-          if (r.path.toLowerCase().indexOf(q) >= 0 || (r.label && r.label.toLowerCase().indexOf(q) >= 0)) return true;
-          const v = readRow(r);
-          return v !== undefined && String(v).toLowerCase() === q;
-        });
-      }
+      rows = allRows.filter((r) => {
+        if (kindFilter !== "all" && r.kind !== kindFilter) return false;
+        if (!q) return true;
+        if (r.path.toLowerCase().indexOf(q) >= 0 || (r.label && r.label.toLowerCase().indexOf(q) >= 0)) return true;
+        const v = readRow(r);
+        if (v === undefined || v === null) return false;
+        const s = String(v).toLowerCase();
+        return r.type === "string" ? s.indexOf(q) >= 0 : s === q;
+      });
       scroller.scrollTop = 0;
       renderTable();
       status.textContent = rows.length + " of " + allRows.length + " variables";
@@ -511,6 +587,7 @@
 
     const page2 = el("div", { className: "pg hide" }, [
       el("div", { className: "srch" }, [searchIn, rescanBtn]),
+      chips,
       countLbl,
       scroller
     ]);
