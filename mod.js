@@ -15,17 +15,18 @@
     window.__fishGui = true;
 
     // ================= saved settings =================
-    const KEY = "fishmod_v3";
+    const KEY = "fishmod_v4";
     const loadSaved = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } };
     const saved = loadSaved();
 
     const S = (window.__S = {
-      mult: 1, spoof: false, golden: false, pick: -1, jit: 1, tab: 0,
+      mult: 1, vmult: 1, spoof: false, golden: false, pick: -1, jit: 1, tab: 0,
       lvl: { depth: 1, fish: 1, income: 1 } // mirrors the real game levels (the game saves these itself)
     });
-    ["mult", "spoof", "golden", "pick", "jit", "tab"].forEach((k) => { if (saved[k] !== undefined) S[k] = saved[k]; });
+    ["mult", "vmult", "spoof", "golden", "pick", "jit", "tab"].forEach((k) => { if (saved[k] !== undefined) S[k] = saved[k]; });
 
     const G = () => _zp(null, null, global._Dw);
+    const globalObj = () => (typeof global !== "undefined" ? global : window.global);
 
     // ================= game patches =================
     const origE9 = window._E9;
@@ -78,6 +79,28 @@
     const origDist = G()._KE;
     setInterval(() => { try { G()._KE = S.mult > 1 ? 0 : origDist; } catch (e) {} }, 1000);
 
+    // ================= fish value multiplier =================
+    // multiplies the "price" field of every fish type (originals are remembered so x1 restores them)
+    const origPrice = new WeakMap();
+    let vActive = false;
+    const applyValue = () => {
+      if (typeof _Iu !== "function") return;
+      if (S.vmult === 1 && !vActive) return;
+      vActive = S.vmult !== 1;
+      const g = G();
+      for (let i = 0; i < g._dF; i++) {
+        const m = g._eF[i];
+        if (!m || typeof m !== "object") continue;
+        if (!origPrice.has(m)) {
+          const p = _Ou(m, "price");
+          if (typeof p !== "number") continue;
+          origPrice.set(m, p);
+        }
+        _Iu(m, "price", origPrice.get(m) * S.vmult);
+      }
+    };
+    setInterval(() => { try { applyValue(); } catch (e) {} }, 2000);
+
     // ================= real game levels =================
     // _CG = max depth level, _BG = max fishes level, _EG = income ($/min, offline earnings) level
     const readLvl = () => { const g = G(); return { depth: g._CG, fish: g._BG, income: g._EG }; };
@@ -112,34 +135,37 @@
     const root = host.attachShadow({ mode: "open" });
 
     const spring = "cubic-bezier(.34,1.56,.64,1)";
+    const MONO = "ui-monospace,Menlo,Consolas,monospace";
     const css = [
       // ---- liquid glass panel ----
-      ".p{position:relative;width:300px;color:#fff;font:13px -apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,sans-serif;border-radius:34px;",
+      ".p{position:relative;width:300px;color:#000;font:13px -apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,sans-serif;border-radius:34px;",
       "background:linear-gradient(135deg,rgba(255,255,255,.16),rgba(255,255,255,.04));",
       "-webkit-backdrop-filter:blur(14px) saturate(190%) brightness(1.08);",
       "backdrop-filter:blur(14px) saturate(190%) brightness(1.08);",
       "backdrop-filter:url(#lgfilter) blur(6px) saturate(190%) brightness(1.08);",
       "box-shadow:0 18px 50px rgba(0,0,0,.35),0 2px 8px rgba(0,0,0,.2),inset 0 0 0 1px rgba(255,255,255,.1),inset 0 1px 1px rgba(255,255,255,.55),inset 0 -10px 22px rgba(255,255,255,.07);",
-      "transition:transform .6s " + spring + ";user-select:none;overflow:hidden;will-change:transform}",
+      "transition:transform .6s " + spring + ",width .5s " + spring + ";user-select:none;overflow:hidden;will-change:transform}",
+      ".p.wide{width:390px}",
       ".p::before{content:'';position:absolute;inset:0;border-radius:inherit;padding:1.5px;pointer-events:none;z-index:3;",
       "background:linear-gradient(140deg,rgba(255,255,255,.95),rgba(255,255,255,.08) 28%,rgba(255,255,255,.04) 62%,rgba(255,255,255,.7));",
       "-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}",
       ".p::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:0;",
       "background:radial-gradient(230px circle at var(--mx,30%) var(--my,0%),rgba(255,255,255,.26),rgba(255,255,255,0) 62%)}",
       ".h,.b{position:relative;z-index:1}",
-      ".h{padding:15px 18px 9px;display:flex;justify-content:space-between;align-items:center;cursor:grab;touch-action:none;font-weight:700;font-size:15px;letter-spacing:.2px;text-shadow:0 1px 6px rgba(0,0,0,.3)}",
+      ".h{padding:15px 18px 9px;display:flex;justify-content:space-between;align-items:center;cursor:grab;touch-action:none;font-weight:700;font-size:15px;letter-spacing:.2px;text-shadow:0 1px 6px rgba(0,0,0,.1)}",
       ".dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#34c759;margin-left:8px;opacity:0;transition:opacity .6s;vertical-align:middle;box-shadow:0 0 8px #34c759}",
       ".dot.on{opacity:1;transition:none}",
-      ".min{width:28px;height:28px;border-radius:50%;border:1px solid rgba(255,255,255,.4);background:linear-gradient(160deg,rgba(255,255,255,.35),rgba(255,255,255,.1));box-shadow:inset 0 1px 1px rgba(255,255,255,.6);color:#fff;font-size:15px;line-height:24px;text-align:center;cursor:pointer;padding:0;transition:transform .4s " + spring + "}",
+      ".min{width:28px;height:28px;border-radius:50%;border:1px solid rgba(255,255,255,.4);background:linear-gradient(160deg,rgba(255,255,255,.35),rgba(255,255,255,.1));box-shadow:inset 0 1px 1px rgba(255,255,255,.6);color:#000;font-size:15px;line-height:24px;text-align:center;cursor:pointer;padding:0;transition:transform .4s " + spring + "}",
       ".b{padding:2px 14px 16px;display:flex;flex-direction:column;gap:10px}",
       ".b.hide{display:none}",
       // ---- tabs ----
       ".tabs{position:relative;display:flex;padding:3px;border-radius:18px;background:rgba(0,0,0,.22);box-shadow:inset 0 1px 3px rgba(0,0,0,.25),0 1px 0 rgba(255,255,255,.2)}",
-      ".tab{flex:1;text-align:center;padding:8px 0;font-weight:600;font-size:12.5px;cursor:pointer;position:relative;z-index:1;opacity:.7;transition:opacity .25s,transform .4s " + spring + "}",
+      ".tab{flex:1;text-align:center;padding:8px 0;font-weight:600;font-size:12px;cursor:pointer;position:relative;z-index:1;opacity:.7;transition:opacity .25s,transform .4s " + spring + "}",
       ".tab.on{opacity:1}",
       ".tab:active{transform:scale(.94)}",
-      ".ind{position:absolute;top:3px;bottom:3px;left:3px;width:calc(50% - 3px);border-radius:15px;background:linear-gradient(160deg,rgba(255,255,255,.42),rgba(255,255,255,.14));box-shadow:inset 0 1px 1px rgba(255,255,255,.7),0 2px 8px rgba(0,0,0,.2);transition:transform .55s " + spring + "}",
+      ".ind{position:absolute;top:3px;bottom:3px;left:3px;width:calc((100% - 6px) / 3);border-radius:15px;background:linear-gradient(160deg,rgba(255,255,255,.42),rgba(255,255,255,.14));box-shadow:inset 0 1px 1px rgba(255,255,255,.7),0 2px 8px rgba(0,0,0,.2);transition:transform .55s " + spring + "}",
       ".tabs.t1 .ind{transform:translateX(100%)}",
+      ".tabs.t2 .ind{transform:translateX(200%)}",
       ".pg{display:flex;flex-direction:column;gap:10px;animation:pgin .45s " + spring + "}",
       ".pg.hide{display:none}",
       "@keyframes pgin{from{opacity:0;transform:translateY(8px) scale(.97)}to{opacity:1;transform:none}}",
@@ -149,10 +175,11 @@
       ".lbl{font-weight:600}",
       ".lbl small{display:block;opacity:.7;font-size:11px;font-weight:400;margin-top:1px}",
       ".step{display:flex;align-items:center;gap:2px;background:rgba(0,0,0,.22);border-radius:16px;padding:3px;box-shadow:inset 0 1px 3px rgba(0,0,0,.25),0 1px 0 rgba(255,255,255,.2)}",
-      ".step button{width:28px;height:28px;border:0;border-radius:13px;background:linear-gradient(160deg,rgba(255,255,255,.34),rgba(255,255,255,.12));box-shadow:inset 0 1px 1px rgba(255,255,255,.6);color:#fff;font-size:17px;line-height:26px;cursor:pointer;padding:0;transition:transform .4s " + spring + "}",
-      ".step input{width:44px;text-align:center;background:transparent;border:0;color:#fff;font:700 14px -apple-system,system-ui,sans-serif;outline:none;-moz-appearance:textfield;padding:0}",
+      ".step button{width:28px;height:28px;border:0;border-radius:13px;background:linear-gradient(160deg,rgba(255,255,255,.34),rgba(255,255,255,.12));box-shadow:inset 0 1px 1px rgba(255,255,255,.6);color:#000;font-size:17px;line-height:26px;cursor:pointer;padding:0;transition:transform .4s " + spring + "}",
+      ".step input{width:44px;text-align:center;background:transparent;border:0;color:#000;font:700 14px -apple-system,system-ui,sans-serif;outline:none;-moz-appearance:textfield;padding:0}",
       ".step.wide input{width:58px}",
       ".step input::-webkit-inner-spin-button,.step input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}",
+      "input{user-select:text;-webkit-user-select:text}",
       ".min:active,.step button:active{transform:scale(.82)}",
       ".sw{width:50px;height:30px;border-radius:15px;background:rgba(255,255,255,.2);box-shadow:inset 0 1px 3px rgba(0,0,0,.28),0 1px 0 rgba(255,255,255,.25);position:relative;cursor:pointer;transition:background .3s;flex:none}",
       ".sw i{position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:12px;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.4),inset 0 -2px 3px rgba(0,0,0,.08);transition:transform .45s " + spring + ",width .3s " + spring + ",background .2s}",
@@ -173,9 +200,25 @@
       ".tile em{font-style:normal;font-size:10px;opacity:.75;pointer-events:none}",
       ".badge{position:absolute;top:5px;right:6px;width:7px;height:7px;border-radius:50%;pointer-events:none}",
       ".idx{position:absolute;bottom:2px;left:6px;font-size:9px;opacity:.55;pointer-events:none}",
-      ".status{font:11px ui-monospace,Menlo,monospace;opacity:.85;min-height:13px;padding:0 6px;text-shadow:0 1px 4px rgba(0,0,0,.3)}"
+      ".status{font:11px " + MONO + ";opacity:.85;min-height:13px;padding:0 6px}",
+      // ---- advanced tab (variable table) ----
+      ".srch{display:flex;gap:8px;align-items:center}",
+      ".srch input{flex:1;min-width:0;box-sizing:border-box;height:32px;background:rgba(0,0,0,.22);border:0;border-radius:16px;padding:0 13px;color:#000;font:12.5px -apple-system,system-ui,sans-serif;outline:none;box-shadow:inset 0 1px 3px rgba(0,0,0,.25),0 1px 0 rgba(255,255,255,.2)}",
+      ".srch input::placeholder{color:rgba(0,0,0,.55)}",
+      ".rbtn{border:0;border-radius:16px;padding:0 13px;height:32px;background:linear-gradient(160deg,rgba(255,255,255,.34),rgba(255,255,255,.12));box-shadow:inset 0 1px 1px rgba(255,255,255,.6);color:#000;font:600 12px -apple-system,system-ui,sans-serif;cursor:pointer;flex:none;transition:transform .4s " + spring + "}",
+      ".rbtn:active{transform:scale(.9)}",
+      ".thd{display:flex;justify-content:space-between;padding:0 12px;font-size:10.5px;font-weight:600;letter-spacing:.5px;opacity:.65}",
+      ".tbl{position:relative;height:270px;overflow-y:auto;border-radius:20px;background:rgba(0,0,0,.2);box-shadow:inset 0 1px 3px rgba(0,0,0,.28),0 1px 0 rgba(255,255,255,.2)}",
+      ".tbl::-webkit-scrollbar{width:6px}.tbl::-webkit-scrollbar-thumb{background:rgba(255,255,255,.3);border-radius:3px}",
+      ".spc{position:relative;width:100%}",
+      ".vw{position:absolute;left:0;right:0;top:0}",
+      ".tr{height:30px;box-sizing:border-box;display:flex;align-items:center;gap:8px;padding:0 10px;border-bottom:1px solid rgba(255,255,255,.07)}",
+      ".nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font:11px " + MONO + "}",
+      ".nm i{font-style:normal;color:#000000;margin-left:7px;font-family:-apple-system,system-ui,sans-serif;font-size:10.5px}",
+      ".tr input{width:112px;flex:none;box-sizing:border-box;background:rgba(255,255,255,.12);border:0;border-radius:9px;padding:4px 8px;color:#000;font:600 11.5px " + MONO + ";outline:none;text-align:right;box-shadow:inset 0 1px 2px rgba(0,0,0,.25)}",
+      ".tr input:focus{background:rgba(255,255,255,.26)}",
+      ".empty{padding:22px;text-align:center;opacity:.6;font-size:12px}"
     ].join("");
-
     const el = (tag, props, kids) => {
       const n = document.createElement(tag);
       if (props) Object.assign(n, props);
@@ -258,6 +301,20 @@
       ])
     ]);
 
+    const vmult = stepper(1, 1, 1000000, true, (v, user) => {
+      S.vmult = v;
+      if (user) {
+        try { applyValue(); status.textContent = "fish value x" + v; }
+        catch (e) { status.textContent = "value ERR: " + e; }
+      }
+    });
+    const vmultRow = el("div", { className: "card" }, [
+      el("div", { className: "row" }, [
+        el("div", { className: "lbl" }, [document.createTextNode("Fish value multiplier"), el("small", { textContent: "price of every fish" })]),
+        vmult.wrap
+      ])
+    ]);
+
     const mkSwitch = (extra) => el("div", { className: "sw" + (extra ? " " + extra : "") }, [el("i")]);
     const spoofSw = mkSwitch();
     const goldSw = mkSwitch("gold");
@@ -276,7 +333,7 @@
         goldSw
       ])
     ]);
-    const page0 = el("div", { className: "pg" }, [multRow, spoofRow, goldRow]);
+    const page0 = el("div", { className: "pg" }, [multRow, vmultRow, spoofRow, goldRow]);
 
     // ===== TAB 2: levels =====
     const levelRows = {};
@@ -302,22 +359,186 @@
       mkLevelRow("income", "Offline earning", 1000)
     ]);
 
+    // ===== TAB 3: advanced (every variable, scrollable + editable) =====
+    // Variables we decoded from the game code get a readable label and float to the top.
+    const KNOWN = {
+      "G._CG": "max depth level", "G._cF": "max depth", "G._BG": "max fishes level", "G._2F": "max fishes",
+      "G._EG": "income level", "G._DG": "income $/min", "G._FG": "money", "G._lE": "px per meter",
+      "G._KE": "min fish gap", "G._oF": "max fish gap", "G._dF": "fish types", "G._7F": "expected dive earnings"
+    };
+    const DERIVED = { "G._cF": 1, "G._2F": 1, "G._DG": 1 };
+    const ROW = 30;
+    let allRows = [], rows = [], rendered = [];
+
+    const rootOf = (n) => (n === "G" ? G() : globalObj());
+    const resolveRow = (r) => {
+      let o = rootOf(r.root);
+      for (let i = 0; i < r.keys.length - 1; i++) { o = o[r.keys[i]]; if (o == null) return null; }
+      return [o, r.keys[r.keys.length - 1]];
+    };
+    const readRow = (r) => { try { const p = resolveRow(r); return p ? p[0][p[1]] : undefined; } catch (e) { return undefined; } };
+
+    const scanAll = () => {
+      const out = [], seen = new WeakSet();
+      let n = 0;
+      const LIMIT = 30000;
+      const walk = (o, rootName, keys, pathStr, depth) => {
+        if (depth > 4 || n >= LIMIT) return;
+        let ks; try { ks = Object.keys(o); } catch (e) { return; }
+        const isArr = Array.isArray(o);
+        if (isArr && ks.length > 300) ks = ks.slice(0, 300);
+        for (const k of ks) {
+          if (n >= LIMIT) break;
+          let v; try { v = o[k]; } catch (e) { continue; }
+          const p = isArr ? pathStr + "[" + k + "]" : pathStr + "." + k;
+          const t = typeof v;
+          if (t === "number" || t === "boolean" || (t === "string" && v.length <= 500)) {
+            out.push({ root: rootName, keys: keys.concat(k), path: p, type: t, label: KNOWN[p] || "" });
+            n++;
+          } else if (v && t === "object") {
+            const tag = Object.prototype.toString.call(v);
+            if ((tag === "[object Object]" || tag === "[object Array]") && !seen.has(v)) {
+              seen.add(v);
+              walk(v, rootName, keys.concat(k), p, depth + 1);
+            }
+          }
+        }
+      };
+      [["G", G()], ["global", globalObj()]].forEach(([name, obj]) => {
+        if (!obj) return;
+        seen.add(obj);
+        walk(obj, name, [], name, 0);
+      });
+      // decoded variables first
+      const known = out.filter((r) => r.label), rest = out.filter((r) => !r.label);
+      return known.concat(rest);
+    };
+
+    const searchIn = el("input", { type: "text", placeholder: "Search name or exact value..." });
+    const rescanBtn = el("button", { className: "rbtn", textContent: "Rescan" });
+    const countLbl = el("div", { className: "thd" }, [el("span", { textContent: "VARIABLE" }), el("span", { textContent: "VALUE" })]);
+    const scroller = el("div", { className: "tbl" });
+    const spacer = el("div", { className: "spc" });
+    const view = el("div", { className: "vw" });
+    spacer.appendChild(view);
+    scroller.appendChild(spacer);
+
+    const commit = (r, input) => {
+      const txt = input.value;
+      let v;
+      if (r.type === "number") {
+        v = Number(txt);
+        if (txt.trim() === "" || !isFinite(v)) { input.value = String(readRow(r)); status.textContent = "not a number"; return; }
+      } else if (r.type === "boolean") {
+        const s = txt.trim().toLowerCase();
+        if (s === "true" || s === "1") v = true;
+        else if (s === "false" || s === "0") v = false;
+        else { input.value = String(readRow(r)); status.textContent = "use true / false"; return; }
+      } else v = txt;
+      try {
+        const p = resolveRow(r);
+        p[0][p[1]] = v;
+        input.value = String(v);
+        status.textContent = "set " + r.path + " = " + v + (DERIVED[r.path] ? " (game recalcs this from the level)" : "");
+      } catch (e) { status.textContent = "set ERR: " + e; }
+    };
+
+    const renderTable = () => {
+      const top = scroller.scrollTop, vh = scroller.clientHeight || 270;
+      const start = Math.max(0, Math.floor(top / ROW) - 4);
+      const end = Math.min(rows.length, Math.ceil((top + vh) / ROW) + 4);
+      spacer.style.height = rows.length * ROW + "px";
+      view.style.transform = "translateY(" + start * ROW + "px)";
+      view.innerHTML = "";
+      rendered = [];
+      if (!rows.length) { view.appendChild(el("div", { className: "empty", textContent: allRows.length ? "no matches" : "nothing scanned yet" })); return; }
+      for (let i = start; i < end; i++) {
+        const r = rows[i];
+        const cur = readRow(r);
+        const nm = el("div", { className: "nm", title: r.path + "  (" + r.type + ")" }, [document.createTextNode(r.path)]);
+        if (r.label) nm.appendChild(el("i", { textContent: r.label }));
+        const input = el("input", { type: "text", value: cur === undefined ? "" : String(cur), spellcheck: false });
+        input.onchange = () => commit(r, input);
+        input.onkeydown = (e) => { if (e.key === "Enter") input.blur(); };
+        view.appendChild(el("div", { className: "tr" }, [nm, input]));
+        rendered.push({ r, input });
+      }
+    };
+    let rafPending = false;
+    scroller.addEventListener("scroll", () => {
+      if (rafPending) return;
+      rafPending = true;
+      requestAnimationFrame(() => { rafPending = false; renderTable(); });
+    });
+
+    const updateCount = () => { /* shown in status */ };
+    const applyFilter = () => {
+      const q = searchIn.value.trim().toLowerCase();
+      if (!q) rows = allRows;
+      else {
+        rows = allRows.filter((r) => {
+          if (r.path.toLowerCase().indexOf(q) >= 0 || (r.label && r.label.toLowerCase().indexOf(q) >= 0)) return true;
+          const v = readRow(r);
+          return v !== undefined && String(v).toLowerCase() === q;
+        });
+      }
+      scroller.scrollTop = 0;
+      renderTable();
+      status.textContent = rows.length + " of " + allRows.length + " variables";
+    };
+    let ft;
+    searchIn.addEventListener("input", () => { clearTimeout(ft); ft = setTimeout(applyFilter, 200); });
+
+    const doScan = () => {
+      status.textContent = "scanning...";
+      setTimeout(() => {
+        try { allRows = scanAll(); applyFilter(); }
+        catch (e) { status.textContent = "scan ERR: " + e; }
+      }, 30);
+    };
+    rescanBtn.onclick = doScan;
+
+    // live values for the rows you can see (skips the one you're typing in)
+    setInterval(() => {
+      if (S.tab !== 2 || body.classList.contains("hide")) return;
+      rendered.forEach(({ r, input }) => {
+        if (root.activeElement === input) return;
+        const cur = readRow(r);
+        const s = cur === undefined ? "" : String(cur);
+        if (input.value !== s) input.value = s;
+      });
+    }, 800);
+
+    const page2 = el("div", { className: "pg hide" }, [
+      el("div", { className: "srch" }, [searchIn, rescanBtn]),
+      countLbl,
+      scroller
+    ]);
+
     // ===== tab bar =====
     const tabA = el("div", { className: "tab on", textContent: "Fish spoofing" });
     const tabB = el("div", { className: "tab", textContent: "Levels" });
-    const tabs = el("div", { className: "tabs" }, [el("div", { className: "ind" }), tabA, tabB]);
+    const tabC = el("div", { className: "tab", textContent: "Advanced" });
+    const tabs = el("div", { className: "tabs" }, [el("div", { className: "ind" }), tabA, tabB, tabC]);
+    let scanned = false;
     const setTab = (i) => {
       S.tab = i;
       tabs.classList.toggle("t1", i === 1);
-      tabA.classList.toggle("on", i === 0);
-      tabB.classList.toggle("on", i === 1);
-      page0.classList.toggle("hide", i !== 0);
-      page1.classList.toggle("hide", i !== 1);
+      tabs.classList.toggle("t2", i === 2);
+      [tabA, tabB, tabC].forEach((t, j) => t.classList.toggle("on", j === i));
+      [page0, page1, page2].forEach((p, j) => p.classList.toggle("hide", j !== i));
+      panel.classList.toggle("wide", i === 2);
+      setTimeout(() => reclamp(true), 560); // keep the wider panel on screen
+      if (i === 2) {
+        if (!scanned) { scanned = true; doScan(); }
+        else requestAnimationFrame(renderTable);
+      }
     };
     tabA.onclick = () => setTab(0);
     tabB.onclick = () => setTab(1);
+    tabC.onclick = () => setTab(2);
 
-    const body = el("div", { className: "b" }, [tabs, page0, page1, status]);
+    const body = el("div", { className: "b" }, [tabs, page0, page1, page2, status]);
     const panel = el("div", { className: "p" }, [head, body]);
     root.appendChild(el("style", { textContent: css }));
     root.appendChild(mkSvg());
@@ -341,7 +562,7 @@
       });
     };
     updateMap();
-    if (window.ResizeObserver) new ResizeObserver(() => { clearTimeout(tm); tm = setTimeout(updateMap, 60); }).observe(panel);
+    if (window.ResizeObserver) new ResizeObserver(() => { clearTimeout(tm); tm = setTimeout(updateMap, 90); }).observe(panel);
 
     // light follows the pointer
     panel.addEventListener("pointermove", (e) => {
@@ -356,18 +577,20 @@
       maxT: Math.max(0, innerHeight - host.offsetHeight)
     });
     const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+    const reclamp = (animated) => {
+      const b = bounds();
+      const cl = clamp(host.offsetLeft, 0, b.maxL), ct = clamp(host.offsetTop, 0, b.maxT);
+      if (cl === host.offsetLeft && ct === host.offsetTop) return;
+      if (animated) {
+        host.style.transition = "left .55s " + spring + ",top .55s " + spring;
+        setTimeout(() => { host.style.transition = ""; }, 600);
+      }
+      host.style.left = cl + "px"; host.style.top = ct + "px";
+    };
     if (saved.pos) { host.style.left = saved.pos.l + "px"; host.style.top = saved.pos.t + "px"; }
     if (saved.min) body.classList.add("hide");
-    {
-      const b = bounds();
-      host.style.left = clamp(host.offsetLeft, 0, b.maxL) + "px";
-      host.style.top = clamp(host.offsetTop, 0, b.maxT) + "px";
-    }
-    addEventListener("resize", () => {
-      const b = bounds();
-      host.style.left = clamp(host.offsetLeft, 0, b.maxL) + "px";
-      host.style.top = clamp(host.offsetTop, 0, b.maxT) + "px";
-    });
+    reclamp(false);
+    addEventListener("resize", () => reclamp(false));
 
     // ---- drag with iOS-style edge warp ----
     // Near a screen edge the glass squashes against it and bulges sideways; pushing past the edge
@@ -382,7 +605,7 @@
       host.style.transition = "";
       dx = e.clientX - host.offsetLeft; dy = e.clientY - host.offsetTop;
       head.setPointerCapture(e.pointerId);
-      panel.style.transition = "transform .15s ease-out";
+      panel.style.transition = "transform .15s ease-out, width .5s " + spring;
       panel.style.transform = "scale(1.03)";
     });
     head.addEventListener("pointermove", (e) => {
@@ -414,13 +637,7 @@
       drag = false;
       panel.style.transition = "";   // springy transition again
       panel.style.transform = "";
-      const b = bounds();
-      const cl = clamp(host.offsetLeft, 0, b.maxL), ct = clamp(host.offsetTop, 0, b.maxT);
-      if (cl !== host.offsetLeft || ct !== host.offsetTop) {
-        host.style.transition = "left .55s " + spring + ",top .55s " + spring;
-        host.style.left = cl + "px"; host.style.top = ct + "px";
-        setTimeout(() => { host.style.transition = ""; }, 600);
-      }
+      // reclamp(true);
       originTimer = setTimeout(() => { if (!drag) panel.style.transformOrigin = ""; }, 700);
     };
     head.addEventListener("pointerup", endDrag);
@@ -515,17 +732,19 @@
 
     // load saved values into the controls
     mult.set(S.mult, false);
+    vmult.set(S.vmult, false);
     ["depth", "fish", "income"].forEach((k) => levelRows[k].set(S.lvl[k], false));
     pullLevels();
-    setTab(S.tab === 1 ? 1 : 0);
+    setTab(S.tab === 1 || S.tab === 2 ? S.tab : 0);
     sync();
+    try { applyValue(); } catch (e) {}
 
     // ================= autosave every 2 seconds =================
     let lastJson = JSON.stringify(saved);
     setInterval(() => {
       try {
         const data = {
-          mult: S.mult, spoof: S.spoof, golden: S.golden, pick: S.pick, jit: S.jit, tab: S.tab,
+          mult: S.mult, vmult: S.vmult, spoof: S.spoof, golden: S.golden, pick: S.pick, jit: S.jit, tab: S.tab,
           pos: { l: host.offsetLeft, t: host.offsetTop },
           min: body.classList.contains("hide")
         };
@@ -538,6 +757,6 @@
       } catch (e) {}
     }, 2000);
 
-    console.log("fish GUI loaded. Console: __S.mult, __S.spoof, __S.golden, __S.pick, __S.lvl");
+    console.log("fish GUI loaded. Console: __S.mult, __S.vmult, __S.spoof, __S.golden, __S.pick, __S.lvl");
   }
 })();
