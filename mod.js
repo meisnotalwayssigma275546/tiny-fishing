@@ -11,7 +11,6 @@
   }, 500);
 
   function start() {
-    status.textContent = idx < 0 ? "made by meisnotalwayssigma275546";
     if (window.__fishGui) return;
     window.__fishGui = true;
 
